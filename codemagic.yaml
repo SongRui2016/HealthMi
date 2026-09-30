@@ -1,0 +1,25 @@
+workflows:
+  ios-workflow:
+    name: HealthMi iOS Build
+    max_build_duration: 60
+    environment:
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install CocoaPods
+        script: |
+          if [ -f Podfile ]; then
+            pod install
+          fi
+      - name: Build iOS
+        script: |
+          xcodebuild \
+            -project HealthMi.xcodeproj \
+            -scheme HealthMi \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath $CM_BUILD_DIR/HealthMi.xcarchive \
+            archive
+    artifacts:
+      - $CM_BUILD_DIR/*.xcarchive
+      - $CM_BUILD_DIR/build/ios/ipa/*.ipa
