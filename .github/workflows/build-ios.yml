@@ -2,69 +2,45 @@ name: Build HealthMi iOS
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
     name: Build HealthMi
-    runs-on: macos-15
+    runs-on: macos-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Select Xcode
+      # 模拟器编译（保留原样，作为参考）
+      - name: Build for iOS Simulator
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.4.app
-          xcodebuild -version
-          swift --version
+          xcodebuild -project HealthMi.xcodeproj -scheme HealthMi -sdk iphonesimulator -configuration Release build
+          mkdir -p build/ios/iphonesimulator
+          cp -r build/Release-iphonesimulator/HealthMi.app build/ios/iphonesimulator/
 
-      - name: Install XcodeGen
+      # 真机编译 —— 不签名，只打包
+      - name: Build for iOS Device
         run: |
-          brew install xcodegen
-          xcodegen --version
+          xcodebuild -project HealthMi.xcodeproj -scheme HealthMi -sdk iphoneos -configuration Release build CODE_SIGNING_ALLOWED=NO
 
-      - name: Generate Xcode project
+      # 打包成 .ipa
+      - name: Package IPA
         run: |
-          xcodegen generate
+          mkdir -p Payload
+          cp -r build/Release-iphoneos/HealthMi.app Payload/
+          zip -r HealthMi.ipa Payload/
+          ls -la HealthMi.ipa
 
-      - name: Show schemes
-        run: |
-          xcodebuild -list -project HealthMi.xcodeproj
+      # 上传产物
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: HealthMi-iOS-IPA
+          path: HealthMi.ipa
 
-      - name: Build iOS Simulator
-        run: |
-          xcodebuild \
-            -project HealthMi.xcodeproj \
-            -scheme HealthMi \
-            -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build
-
-      - name: Package app
-        run: |
-          mkdir -p artifacts
-
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData \
-            -path "*/Build/Products/Debug-iphonesimulator/HealthMi.app" \
-            -type d \
-            -print -quit)
-
-          echo "APP_PATH=$APP_PATH"
-
-          if [ -z "$APP_PATH" ]; then
-            echo "HealthMi.app not found"
-            exit 1
-          fi
-
-          ditto "$APP_PATH" artifacts/HealthMi.app
-
-      - name: Upload build artifact
+      - name: Upload Simulator
         uses: actions/upload-artifact@v4
         with:
           name: HealthMi-iOS-Simulator
-          path: artifacts/HealthMi.app
+          path: build/ios/iphonesimulator/HealthMi.app
