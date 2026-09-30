@@ -1,0 +1,70 @@
+name: Build HealthMi iOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build HealthMi
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: |
+          xcodegen generate
+
+      - name: Show schemes
+        run: |
+          xcodebuild -list -project HealthMi.xcodeproj
+
+      - name: Build iOS Simulator
+        run: |
+          xcodebuild \
+            -project HealthMi.xcodeproj \
+            -scheme HealthMi \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package app
+        run: |
+          mkdir -p artifacts
+
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData \
+            -path "*/Build/Products/Debug-iphonesimulator/HealthMi.app" \
+            -type d \
+            -print -quit)
+
+          echo "APP_PATH=$APP_PATH"
+
+          if [ -z "$APP_PATH" ]; then
+            echo "HealthMi.app not found"
+            exit 1
+          fi
+
+          ditto "$APP_PATH" artifacts/HealthMi.app
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HealthMi-iOS-Simulator
+          path: artifacts/HealthMi.app
