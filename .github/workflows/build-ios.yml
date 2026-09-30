@@ -9,55 +9,62 @@ on:
 jobs:
   build:
     name: Build HealthMi
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get project info
+      - name: Select Xcode
         run: |
-          xcodebuild -project HealthMi.xcodeproj -list > project-info.txt
-          cat project-info.txt
+          sudo xcode-select -s /Applications/Xcode_16.4.app
+          xcodebuild -version
+          swift --version
 
-      - name: Build Simulator
+      - name: Install XcodeGen
         run: |
-          xcodebuild -project HealthMi.xcodeproj -scheme HealthMi \
-            -sdk iphonesimulator -configuration Release build
+          brew install xcodegen
+          xcodegen --version
 
-      - name: Build Device (no sign)
+      - name: Generate Xcode project
         run: |
-          xcodebuild -project HealthMi.xcodeproj -scheme HealthMi \
-            -sdk iphoneos -configuration Release build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
+          xcodegen generate
 
-      - name: Package IPA
+      - name: Show schemes
         run: |
-          APP_DIR=$(find build -name "HealthMi.app" -type d | grep Release-iphoneos | head -1)
-          if [ -z "$APP_DIR" ]; then
-            APP_DIR=$(find build -name "HealthMi.app" -type d | head -1)
+          xcodebuild -list -project HealthMi.xcodeproj
+
+      - name: Build iOS Simulator
+        run: |
+          xcodebuild \
+            -project HealthMi.xcodeproj \
+            -scheme HealthMi \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package app
+        run: |
+          mkdir -p artifacts
+
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData \
+            -path "*/Build/Products/Debug-iphonesimulator/HealthMi.app" \
+            -type d \
+            -print -quit)
+
+          echo "APP_PATH=$APP_PATH"
+
+          if [ -z "$APP_PATH" ]; then
+            echo "HealthMi.app not found"
+            exit 1
           fi
-          [ -z "$APP_DIR" ] && echo "❌ 找不到 .app 文件" && exit 1
-          
-          mkdir -p Payload
-          cp -R "$APP_DIR" Payload/
-          zip -r HealthMi.ipa Payload/
 
-      - name: Upload IPA
+          ditto "$APP_PATH" artifacts/HealthMi.app
+
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
-        with:
-          name: HealthMi-iOS-IPA
-          path: HealthMi.ipa
-
-      - name: Upload Simulator
-        run: |
-          APP_DIR=$(find build -name "HealthMi.app" -type d | grep iphonesimulator | head -1)
-          [ -n "$APP_DIR" ] && mkdir -p sim && cp -R "$APP_DIR" sim/
-        continue-on-error: true
-
-      - name: Upload Simulator Artifact
-        uses: actions/upload-artifact@v4
-        if: hashFiles('sim/HealthMi.app') != ''
         with:
           name: HealthMi-iOS-Simulator
-          path: sim/HealthMi.app
+          path: artifacts/HealthMi.app
