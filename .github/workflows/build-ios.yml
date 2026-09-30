@@ -12,27 +12,39 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build for iOS Simulator
+      - name: 🔍 查看项目文件结构
+        run: |
+          ls -la
+          echo "---"
+          ls -la HealthMi.xcodeproj/ || echo "⚠️ 没找到 HealthMi.xcodeproj"
+          echo "---"
+          xcodebuild -list 2>&1
+
+      - name: 🔨 编译模拟器版
         run: |
           xcodebuild -project HealthMi.xcodeproj -scheme HealthMi -sdk iphonesimulator -configuration Release build
-          mkdir -p build/ios/iphonesimulator
-          cp -r build/Release-iphonesimulator/HealthMi.app build/ios/iphonesimulator/
+        continue-on-error: false
 
-      - name: Build IPA for iOS Device (no code sign)
+      - name: 📱 编译真机版（不签名）
         run: |
           xcodebuild -project HealthMi.xcodeproj -scheme HealthMi -sdk iphoneos -configuration Release build CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
+        continue-on-error: false
+
+      - name: 📦 打包 IPA
+        run: |
           mkdir -p build/ios/Payload
-          cp -r build/Release-iphoneos/HealthMi.app build/ios/Payload/
+          cp -r build/Release-iphoneos/HealthMi.app build/ios/Payload/ 2>/dev/null || cp -r build/Release/HealthMi.app build/ios/Payload/
           cd build/ios
           zip -r HealthMi.ipa Payload/
+          ls -la
 
-      - name: Upload IPA (real device)
+      - name: ⬆️ 上传 IPA
         uses: actions/upload-artifact@v4
         with:
           name: HealthMi-iOS-IPA
           path: build/ios/HealthMi.ipa
 
-      - name: Upload Simulator build
+      - name: ⬆️ 上传模拟器包
         uses: actions/upload-artifact@v4
         with:
           name: HealthMi-iOS-Simulator
