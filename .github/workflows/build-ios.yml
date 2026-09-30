@@ -15,7 +15,6 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode.app
 
-      # 只做真机编译（模拟器版你已经有，不用在 CI 里跑）
       - name: Build for iOS Device
         run: |
           xcodebuild \
@@ -29,7 +28,6 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build
 
-      # 打包成 .ipa
       - name: Package IPA
         run: |
           mkdir -p Payload
