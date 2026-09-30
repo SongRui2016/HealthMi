@@ -2,69 +2,43 @@ name: Build HealthMi iOS
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
     name: Build HealthMi
-    runs-on: macos-15
+    runs-on: macos-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: |
-          sudo xcode-select -s /Applications/Xcode_16.4.app
-          xcodebuild -version
-          swift --version
+        run: sudo xcode-select -switch /Applications/Xcode.app
 
-      - name: Install XcodeGen
-        run: |
-          brew install xcodegen
-          xcodegen --version
-
-      - name: Generate Xcode project
-        run: |
-          xcodegen generate
-
-      - name: Show schemes
-        run: |
-          xcodebuild -list -project HealthMi.xcodeproj
-
-      - name: Build iOS Simulator
+      # 只做真机编译（模拟器版你已经有，不用在 CI 里跑）
+      - name: Build for iOS Device
         run: |
           xcodebuild \
             -project HealthMi.xcodeproj \
             -scheme HealthMi \
-            -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
             build
 
-      - name: Package app
+      # 打包成 .ipa
+      - name: Package IPA
         run: |
-          mkdir -p artifacts
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/HealthMi.app Payload/
+          zip -r HealthMi.ipa Payload/
+          ls -la HealthMi.ipa
 
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData \
-            -path "*/Build/Products/Debug-iphonesimulator/HealthMi.app" \
-            -type d \
-            -print -quit)
-
-          echo "APP_PATH=$APP_PATH"
-
-          if [ -z "$APP_PATH" ]; then
-            echo "HealthMi.app not found"
-            exit 1
-          fi
-
-          ditto "$APP_PATH" artifacts/HealthMi.app
-
-      - name: Upload build artifact
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: HealthMi-iOS-Simulator
-          path: artifacts/HealthMi.app
+          name: HealthMi-iOS-IPA-unsigned
+          path: HealthMi.ipa
